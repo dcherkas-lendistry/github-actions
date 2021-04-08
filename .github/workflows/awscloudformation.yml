@@ -50,4 +50,4 @@ jobs:
           # The parameters to override in the stack inputs. The list is comma-delimited, with each entry formatted as <ParameterName>=<ParameterValue>.
           parameter-overrides: >-
             Environment=DEV,
-            VpcCidr=192.168.0.0/16
+            VpcCidr=172.16.0.0/16
