@@ -48,6 +48,4 @@ jobs:
           # The comma-delimited list of stack template capabilities to acknowledge. Defaults to 'CAPABILITY_IAM'
           capabilities: CAPABILITY_IAM
           # The parameters to override in the stack inputs. The list is comma-delimited, with each entry formatted as <ParameterName>=<ParameterValue>.
-          parameter-overrides: >-
-            Environment=DEV,
-            VpcCidr=192.168.0.0/16
+          parameter-overrides: ./vpc-dev-parameters.json
