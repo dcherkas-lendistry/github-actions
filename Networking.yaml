@@ -1,0 +1,309 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: CloudFormation template to create VPC and networking services
+
+###############################################################################
+# Parameters 
+###############################################################################   
+
+
+Parameters:
+
+  VpcCidr:
+    Description: 'Specify VPC CIDR block'
+    Type: String
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+  Environment:
+    Description: 'Specify Environment'
+    Type: String
+    AllowedValues: ["DEV", "STAGE", "PREPROD", "PROD"]
+
+
+###############################################################################
+# Conditions
+############################################################################### 
+
+
+Conditions:
+  DEVEnv: !Equals [!Ref Environment, "DEV"]
+  STAGEEnv: !Equals [!Ref Environment, "STAGE"]
+  PREPRODEnv: !Equals [!Ref Environment, "PREPROD"]
+  PRODEnv: !Equals [!Ref Environment, "PROD"]
+
+
+###############################################################################
+# Resources 
+###############################################################################   
+
+
+Resources:
+
+  Vpc:
+    Type: "AWS::EC2::VPC"
+    Properties:
+      CidrBlock: !Ref 'VpcCidr'
+      EnableDnsHostnames: True
+      EnableDnsSupport: True
+      Tags:
+        - Key: 'Name'
+          Value: !Join ['-', [ !Ref 'Environment', 'vpc' ]]
+        - Key: 'Env'
+          Value: !Ref 'Environment'
+
+  PublicSubnet1:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      CidrBlock: !Select [ 0, !Cidr [ !Ref VpcCidr, 12, 8 ] ]
+      VpcId: !Ref Vpc
+      MapPublicIpOnLaunch: false
+      AvailabilityZone: !Select
+        - 0
+        - Fn::GetAZs: !Ref "AWS::Region"
+      Tags:
+        - Key: 'Name'
+          Value: !Join ['-', [ !Ref 'Environment', 'public-subnet01' ]]
+        - Key: 'Env'
+          Value: !Ref 'Environment'
+
+  PublicSubnet2:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      CidrBlock: !Select [ 1, !Cidr [ !Ref VpcCidr, 12, 8 ] ]
+      VpcId: !Ref Vpc
+      MapPublicIpOnLaunch: false
+      AvailabilityZone: !Select
+        - 1
+        - Fn::GetAZs: !Ref "AWS::Region"
+      Tags:
+        - Key: 'Name'
+          Value: !Join ['-', [ !Ref 'Environment', 'public-subnet02' ]]
+        - Key: 'Env'
+          Value: !Ref 'Environment'
+
+  WebTierSubnet1:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      CidrBlock: !Select [ 2, !Cidr [ !Ref VpcCidr, 12, 8 ] ]
+      VpcId: !Ref Vpc
+      MapPublicIpOnLaunch: false
+      AvailabilityZone: !Select
+        - 0
+        - Fn::GetAZs: !Ref "AWS::Region"
+      Tags:
+        - Key: 'Name'
+          Value: !Join ['-', [ !Ref 'Environment', 'webtier-subnet01' ]]
+        - Key: 'Env'
+          Value: !Ref 'Environment'
+
+  WebTierSubnet2:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      CidrBlock: !Select [ 3, !Cidr [ !Ref VpcCidr, 12, 8 ] ]
+      VpcId: !Ref Vpc
+      MapPublicIpOnLaunch: false
+      AvailabilityZone: !Select
+        - 1
+        - Fn::GetAZs: !Ref "AWS::Region"
+      Tags:
+        - Key: 'Name'
+          Value: !Join ['-', [ !Ref 'Environment', 'webtier-subnet02' ]]
+        - Key: 'Env'
+          Value: !Ref 'Environment'
+
+  DatabaseSubnet1:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      CidrBlock: !Select [ 4, !Cidr [ !Ref VpcCidr, 12, 8 ] ]
+      VpcId: !Ref Vpc
+      MapPublicIpOnLaunch: false
+      AvailabilityZone: !Select
+        - 0
+        - Fn::GetAZs: !Ref "AWS::Region"
+      Tags:
+        - Key: 'Name'
+          Value: !Join ['-', [ !Ref 'Environment', 'database-subnet01' ]]
+        - Key: 'Env'
+          Value: !Ref 'Environment'
+
+  DatabaseSubnet2:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      CidrBlock: !Select [ 5, !Cidr [ !Ref VpcCidr, 12, 8 ] ]
+      VpcId: !Ref Vpc
+      MapPublicIpOnLaunch: false
+      AvailabilityZone: !Select
+        - 1
+        - Fn::GetAZs: !Ref "AWS::Region"
+      Tags:
+        - Key: 'Name'
+          Value: !Join ['-', [ !Ref 'Environment', 'database-subnet02' ]]
+        - Key: 'Env'
+          Value: !Ref 'Environment'
+
+  Igw:
+    Type: "AWS::EC2::InternetGateway"
+
+  IgwToVpcAttachment:
+    Type: "AWS::EC2::VPCGatewayAttachment"
+    Properties:
+      InternetGatewayId: !Ref Igw
+      VpcId: !Ref Vpc
+
+  NatEip:
+    Type: "AWS::EC2::EIP"
+
+  NatGw:
+    Type: "AWS::EC2::NatGateway"
+    Properties:
+      AllocationId: !GetAtt NatEip.AllocationId
+      SubnetId: !Ref PublicSubnet1
+
+  PublicRouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref Vpc
+
+  PublicRoute:
+    DependsOn: IgwToVpcAttachment
+    Type: "AWS::EC2::Route"
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref Igw
+
+  PrivateRouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref Vpc
+
+  PrivateRoute:
+    Type: "AWS::EC2::Route"
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGw
+
+  PubSubRtAttachment1:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PubSubRtAttachment2:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  WebSubRtAttachment1:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref WebTierSubnet1
+
+  WebSubRtAttachment2:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref WebTierSubnet2
+
+  DbSubRtAttachment1:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref DatabaseSubnet1
+
+  DbSubRtAttachment2:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref DatabaseSubnet2
+
+  DbSubnetGroup:
+    Type: "AWS::RDS::DBSubnetGroup"
+    Properties:
+      DBSubnetGroupDescription: DB Subnet Group
+      SubnetIds:
+        - !Ref DatabaseSubnet1
+        - !Ref DatabaseSubnet2
+
+  WebTierAsgDesSizeParameter:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Type: String
+      Value: "1"
+
+  WebTierAsgMinSizeParameter:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Type: String
+      Value: "1"
+
+  WebTierAsgMaxSizeParameter:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Type: String
+      Value: "1"
+
+
+###############################################################################
+# Outputs 
+###############################################################################   
+
+
+Outputs:
+
+  VpcId:
+    Value: !Ref Vpc
+    Export:
+      Name: !Sub '${AWS::StackName}-VpcId'
+
+  PublicSubnet1Id:
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet1Id'
+
+  PublicSubnet2Id:
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet2Id'
+
+  WebTierSubnet1Id:
+    Value: !Ref WebTierSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-WebTierSubnet1Id'
+
+  WebTierSubnet2Id:
+    Value: !Ref WebTierSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-WebTierSubnet2Id'
+
+  DatabaseSubnet1Id:
+    Value: !Ref DatabaseSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-DatabaseSubnet1Id'
+
+  DatabaseSubnet2Id:
+    Value: !Ref DatabaseSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-DatabaseSubnet2Id'
+
+
+  DbSubnetGroupId:
+    Value: !Ref DbSubnetGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-DbSubnetGroupId'
+
+  WebTierDesSizeParameter:
+    Value: !Ref WebTierAsgDesSizeParameter
+    Export:
+      Name: !Sub '${AWS::StackName}-WebTierDesSizeParameter'
+
+  WebTierMinSizeParameter:
+    Value: !Ref WebTierAsgMinSizeParameter
+    Export:
+      Name: !Sub '${AWS::StackName}-WebTierMinSizeParameter'
+
+  WebTierMaxSizeParameter:
+    Value: !Ref WebTierAsgMaxSizeParameter
+    Export:
+      Name: !Sub '${AWS::StackName}-WebTierMaxSizeParameter'
